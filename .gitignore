@@ -1,0 +1,64 @@
+# Compiled objects
+*.o
+*.a
+*.so
+*.dylib
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.py[cod]
+*$py.class
+
+# RL training outputs and models
+rl/outputs/
+# Ignore all model zip files except the latest
+rl/models/*.zip
+!rl/models/ppo_genome_diet.zip
+rl/models/checkpoints/
+rl/models/tensorboard/
+rl/models/logs/
+rl/models/best_model/
+
+# Large data files (should be downloaded separately)
+*.sam
+*.bam
+*.vcf
+*.vcf.gz
+*.bcf
+*.bcf.gz
+
+# Large genome reference files (users should download separately or generate)
+# Exclude the full genome file (2.9GB) - users should download it
+Data/GCA_000001405.15_GRCh38_no_alt_analysis_set.fasta
+# Exclude large FASTQ files (users can use smaller test files)
+Data/D1_S1_L001_R1_001-017.fastq
+# Exclude chromosome read files (generated from scripts)
+Data/chromosome_reads/*.fastq
+# Exclude chromosome FASTA files (can be generated from full genome using split script)
+Data/chromosomes/*.fasta
+Data/GRCh38_chr1.fasta
+
+# Archive files
+*.tar.gz
+*.tar
+# Note: *.zip is handled above in RL models section to allow ppo_genome_diet.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.log

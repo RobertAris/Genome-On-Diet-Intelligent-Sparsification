@@ -1,0 +1,41 @@
+env:
+  # DEPRECATED: Single dataset mode
+  # Use env_multi_chromosome.yaml for training (provides diverse observations)
+  # 
+  # NOTE: This config file is outdated and does not include the latest reward function
+  # improvements (soft cap for edit distance, hard thresholds, boosted truth metrics).
+  # For current training, use env_multi_chromosome.yaml instead.
+  
+  # Data paths (relative to project root)
+  reference_fasta: Data/GRCh38_chr1.fasta
+  query_fastq: Data/D1_S1_L001_R1_001-017_small.fastq
+  gdiet_executable: GDiet-ShortReads/GDiet
+  
+  # Pattern generation - maximum pattern length (patterns can be variable length 1-6)
+  pattern_length: 6
+  
+  # GDiet parameters
+  k_size: 21
+  window_size: 11
+  threads: 6
+  max_seeds: 2
+  secondary: 1
+  bandwidth: "0.05,150,200"
+  min_cnt: "0.95,0.3"
+  min_score: 100
+  af_max_loc: 2
+  
+  # Reward weights (OUTDATED - see env_multi_chromosome.yaml for current values)
+  runtime_weight: -6.0
+  mapping_rate_weight: 10.0
+  alignment_score_weight: 0.02
+  edit_distance_weight: -0.5
+  snp_count_weight: 0.1
+  indel_count_weight: 0.1
+  total_variants_weight: 0.05
+  min_mapping_rate_threshold: 0.5
+  small_dataset_runtime_weight_multiplier: 0.3
+  small_dataset_accuracy_weight_multiplier: 1.5
+  small_dataset_threshold: 0.01
+  
+  output_dir: rl/outputs

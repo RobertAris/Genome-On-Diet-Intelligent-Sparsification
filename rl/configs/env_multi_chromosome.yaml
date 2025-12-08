@@ -1,0 +1,104 @@
+env:
+  # Multi-chromosome dataset configuration
+  # Each episode randomly selects a chromosome, providing diverse observations
+  
+  # Chromosome datasets directory (contains chr1.fasta, chr2.fasta, etc.)
+  chromosomes_dir: Data/chromosomes
+  
+  # Chromosome-specific FASTQ files directory (contains chr1_reads.fastq, chr2_reads.fastq, etc.)
+  # Generate these using: python3 rl/scripts/extract_chromosome_reads.py
+  query_fastq_dir: Data/chromosome_reads
+  
+  # Legacy: shared FASTQ file (deprecated - use query_fastq_dir instead)
+  # query_fastq: Data/D1_S1_L001_R1_001-017_small.fastq
+  
+  # Optional: specify which chromosomes to use (if not specified, uses all found)
+  # chromosomes:
+  #   - chr1
+  #   - chr2
+  #   - chr21
+  #   - chrX
+  
+  gdiet_executable: GDiet-ShortReads/GDiet
+  
+  # Pattern generation - maximum pattern length (patterns can be variable length 1-6)
+  pattern_length: 6  # Maximum length: rightmost '1' marks pattern end (0=skip, 1=keep)
+  
+  # GDiet parameters (for Illumina short reads)
+  k_size: 21
+  window_size: 11
+  threads: 6  # Number of threads per GDiet run (adjust based on your CPU cores)
+  max_seeds: 2
+  secondary: 1
+  bandwidth: "0.05,150,200"
+  min_cnt: "0.95,0.3"
+  min_score: 100
+  af_max_loc: 2
+  
+  # Reward weights (will be normalized automatically)
+  # Priority: Truth metrics (F1, indels) > Runtime > Mapping rate > Edit distance (safety threshold)
+  # Negative weights = minimize (runtime, edit_distance, false_positives)
+  # Positive weights = maximize (mapping_rate, truth metrics)
+  runtime_weight: -2.5  # Important but balanced: minimize runtime (on par with accuracy, not above it)
+  mapping_rate_weight: 1.5  # Moderate priority: prevent low-sensitivity patterns
+  alignment_score_weight: 0.0  # Disabled: truth metrics are primary accuracy measures
+  edit_distance_weight: -0.5  # Low continuous influence: soft cap approach
+  edit_distance_soft_cap: 3.0  # ED <= 3: small/no penalty (good enough for Illumina)
+  edit_distance_high_threshold: 3.0  # Threshold for "high" edit distance (moved from 20 to 3)
+  edit_distance_high_penalty_multiplier: 4.0  # Strong extra penalty above soft cap
+  edit_distance_hard_threshold: 10.0  # Hard threshold: ED > 10 gets big penalty (alignment garbage)
+  edit_distance_hard_penalty: -3.0  # Big penalty for edit distance above hard threshold
+  # Raw variant count weights - DISABLED when use_truth_metrics=true
+  # These reward quantity over quality and can incentivize false positives
+  # When truth metrics are available, use truth-based weights instead
+  snp_count_weight: 0.0  # Disabled: truth metrics used instead (prevents FP incentive)
+  indel_count_weight: 0.0  # Disabled: truth metrics used instead (prevents FP incentive)
+  total_variants_weight: 0.0  # Disabled: truth metrics used instead (prevents FP incentive)
+  min_mapping_rate_threshold: 0.5  # Soft penalty if mapping rate below 50%
+  mapping_rate_hard_threshold: 0.9  # Hard threshold: mapping_rate < 0.9 gets big penalty (episode failed)
+  mapping_rate_hard_penalty: -3.0  # Big penalty for mapping rate below hard threshold
+  normalize_weights: true  # Normalize all weights to ensure balanced contribution
+  
+  # Dataset-size-aware reward adjustment (indirect approach)
+  # For small datasets: reduce runtime weight (speed matters less) and increase accuracy weights
+  # This indirectly encourages less sparsification by making accuracy more important than speed
+  small_dataset_runtime_weight_multiplier: 0.3  # Reduce runtime weight to 30% for small datasets
+  small_dataset_accuracy_weight_multiplier: 1.5  # Increase accuracy weights to 150% for small datasets
+  small_dataset_threshold: 0.01  # Threshold for "small dataset" (normalized num_reads < 0.01 = <100 reads)
+  
+  output_dir: rl/outputs
+  
+  # Truth-based evaluation (optional - requires truth VCF from benchmark like HG002)
+  # When enabled, replaces raw variant counts with truth-based metrics:
+  # - true_snps_tp: True positives for SNPs
+  # - true_indels_tp: True positives for indels
+  # - false_positives: False positive variants
+  # - f1_score: F1 score from VCF comparison
+  # - precision: Precision (TP / (TP + FP))
+  # - recall: Recall (TP / (TP + FN))
+  # 
+  # Requirements:
+  # - samtools and bcftools for variant calling (installed via: brew install samtools bcftools)
+  # - Python-based VCF comparison (standard, hap.py optional if available)
+  # - Truth VCF file (e.g., HG002 benchmark from GIAB)
+  # - Optional: confident regions BED file for hap.py
+  #
+  # HG002 truth VCF is available at:
+  # Data/truth_data/HG002_GRCh38_1_22_v4.2.1_benchmark.vcf.gz
+  use_truth_metrics: true  # Enabled: Truth VCF is now cached at initialization (parsed once, reused)
+  truth_vcf: Data/truth_data/HG002_GRCh38_1_22_v4.2.1_benchmark.vcf.gz  # Path to truth VCF
+  # confident_regions_bed: Data/truth_data/HG002_GRCh38_v4.2.1_benchmark.bed  # Optional: confident regions BED file
+  
+  # Truth-based metric weights (used when use_truth_metrics=true)
+  # When truth metrics are available, these replace raw variant counts to reward quality over quantity
+  # These are the PRIMARY accuracy measures - they should dominate the reward signal
+  true_snps_tp_weight: 0.0  # Optional: F1 score already captures SNP performance
+  true_indels_tp_weight: 0.8  # Strong emphasis: indels are first casualty of bad sparsification
+  f1_score_weight: 4.0  # Main global metric: balanced precision/recall (dominates accuracy)
+  false_positives_penalty: -1.0  # Strong penalty: prevent "just call more" strategy
+
+train:
+  algorithm: PPO
+  timesteps: 200
+  save_path: rl/models/ppo_genome_diet
+
