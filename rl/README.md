@@ -68,9 +68,9 @@ else:
 
 # Hard constraints (applied after normalization):
 if mapping_rate < 0.9:
-    reward -= 3.0  # Big penalty (episode failed)
+    reward -= 3.0  # Large penalty (episode failed)
 if edit_distance > 10.0:
-    reward -= 3.0  # Big penalty (alignment garbage)
+    reward -= 3.0  # Large penalty (poor alignment quality)
 
 # Soft penalty for low mapping rate:
 if mapping_rate < 0.5:
@@ -83,13 +83,13 @@ reward = reward × normalization_factor
 **Priority Order**: Truth metrics (F1, indels) > Runtime > Mapping rate > Edit distance (safety threshold)
 
 **Edit Distance Strategy**: 
-- **Soft cap at 3.0**: ED ≤ 3 gets small/no penalty (good enough for Illumina)
-- **Hard threshold at 10.0**: ED > 10 gets big penalty (alignment garbage)
+- **Soft cap at 3.0**: ED ≤ 3 gets small/no penalty (acceptable for Illumina)
+- **Hard threshold at 10.0**: ED > 10 incurs large penalty (poor alignment quality)
 - This gives the agent freedom to trade runtime vs ED as long as ED stays reasonable
 
 **When `use_truth_metrics: true` (recommended):**
 - `f1_score_weight = 4.0` (main global metric: balanced precision/recall - DOMINATES accuracy)
-- `true_indels_tp_weight = 0.8` (strong emphasis: indels are first casualty of bad sparsification)
+- `true_indels_tp_weight = 0.8` (strong emphasis: indels are most sensitive to sparsification quality)
 - `false_positives_penalty = -1.0` (strong penalty: prevent "just call more" strategy)
 - `true_snps_tp_weight = 0.0` (disabled: F1 already captures SNP performance)
 - Raw counts disabled (`snp_count_weight = 0.0`, etc.) to prevent FP incentives
@@ -106,8 +106,8 @@ reward = reward × normalization_factor
 - `edit_distance_soft_cap = 3.0` (ED ≤ 3: small/no penalty)
 - `edit_distance_high_threshold = 3.0` (threshold for increasing penalty)
 - `edit_distance_high_penalty_multiplier = 4.0` (strong extra penalty above soft cap)
-- `edit_distance_hard_threshold = 10.0` (hard threshold: ED > 10 gets big penalty)
-- `mapping_rate_hard_threshold = 0.9` (hard threshold: mapping_rate < 0.9 gets big penalty)
+- `edit_distance_hard_threshold = 10.0` (hard threshold: ED > 10 incurs large penalty)
+- `mapping_rate_hard_threshold = 0.9` (hard threshold: mapping_rate < 0.9 incurs large penalty)
 
 **Truth-Based Metrics (recommended when truth VCF available):**
 When `use_truth_metrics = true`, the reward function uses truth-based variant metrics instead of raw counts:
@@ -130,7 +130,7 @@ When `use_truth_metrics = true`, the reward function uses truth-based variant me
   - `-C 50`: Adjust mapping quality (more sensitive)
 - `true_snps_tp`: True positives for SNPs (compared against HG002 benchmark, chromosome-specific)
 - `true_indels_tp`: True positives for indels (higher weight: indels more sensitive to sparsification)
-- `false_positives`: False positive variants (penalty to discourage junk calls)
+- `false_positives`: False positive variants (penalty to discourage erroneous calls)
 - `f1_score`: Balanced precision/recall metric (primary objective, scaled by 1000×)
 - `precision`: Precision (TP / (TP + FP)), scaled by 1000×, weight 0.5
 - `recall`: Recall (TP / (TP + FN)), scaled by 1000×, weight 0.5
@@ -411,7 +411,7 @@ tensorboard --logdir rl/models/tensorboard
 ### Reward Function Features
 - **Truth metrics dominate**: F1 score (4.0) and indels (0.8) are PRIMARY accuracy measures
 - **Edit distance soft cap**: ED ≤ 3 gets small/no penalty, ED > 3 gets quickly increasing penalty
-- **Hard constraints**: Big penalties for failed episodes (mapping_rate < 0.9 or ED > 10)
+- **Hard constraints**: Large penalties for failed episodes (mapping_rate < 0.9 or ED > 10)
 - **Balanced runtime**: Runtime weight (-2.5) balanced with accuracy, not above it
 - **Weight normalization**: All weights automatically normalized for balanced contribution
 - **Dataset-size-aware adjustment**: Automatically adjusts weights for small datasets
@@ -454,10 +454,10 @@ env:
   edit_distance_soft_cap: 3.0  # ED <= 3: small/no penalty (good enough for Illumina)
   edit_distance_high_threshold: 3.0  # Threshold for increasing penalty
   edit_distance_high_penalty_multiplier: 4.0  # Strong extra penalty above soft cap
-  edit_distance_hard_threshold: 10.0  # Hard threshold: ED > 10 gets big penalty
-  edit_distance_hard_penalty: -3.0  # Big penalty for edit distance above hard threshold
-  mapping_rate_hard_threshold: 0.9  # Hard threshold: mapping_rate < 0.9 gets big penalty
-  mapping_rate_hard_penalty: -3.0  # Big penalty for mapping rate below hard threshold
+  edit_distance_hard_threshold: 10.0  # Hard threshold: ED > 10 incurs large penalty
+  edit_distance_hard_penalty: -3.0  # Large penalty for edit distance above hard threshold
+  mapping_rate_hard_threshold: 0.9  # Hard threshold: mapping_rate < 0.9 incurs large penalty
+  mapping_rate_hard_penalty: -3.0  # Large penalty for mapping rate below hard threshold
   
   # When use_truth_metrics: true, set these to 0.0 (disabled)
   # Raw counts reward quantity over quality and can incentivize false positives
@@ -466,7 +466,7 @@ env:
   total_variants_weight: 0.0  # Disabled when truth metrics enabled
   
   # Truth-based weights (when use_truth_metrics: true) - PRIMARY accuracy measures
-  true_indels_tp_weight: 0.8  # Strong emphasis: indels are first casualty of bad sparsification
+  true_indels_tp_weight: 0.8  # Strong emphasis: indels are most sensitive to sparsification quality
   f1_score_weight: 4.0       # Main global metric: balanced precision/recall (dominates accuracy)
   false_positives_penalty: -1.0  # Strong penalty: prevent "just call more" strategy
   small_dataset_runtime_weight_multiplier: 0.3  # Reduce runtime weight for small datasets (lower = speed matters less)

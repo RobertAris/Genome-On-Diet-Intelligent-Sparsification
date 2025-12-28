@@ -13,7 +13,7 @@ This document explains the purpose of each data file and when to use them.
   - Fast training runs (~2-3 seconds per timestep)
 - **Current usage**: Default in RL configs (`env_multi_chromosome.yaml`)
 
-### `Data/D1_S1_L001_R1_001-017.fastq` (24MB, ~45,000 reads) ⭐
+### `Data/D1_S1_L001_R1_001-017.fastq` (24MB, ~45,000 reads)
 **Purpose**: Final training and realistic evaluation
 - **Use for**:
   - **Final model training** (more realistic, better statistics)
@@ -85,13 +85,13 @@ query_fastq: Data/D1_S1_L001_R1_001-017.fastq  # Full dataset
 - **Mapping rate**: Higher (reads pre-filtered by chromosome)
 
 ### Phase 2: Final Training
-- **Dataset**: `D1_S1_L001_R1_001-017.fastq` (45K reads) ⭐
+- **Dataset**: `D1_S1_L001_R1_001-017.fastq` (45K reads)
 - **Reference**: `Data/chromosomes/` (multi-chromosome) or full genome
 - **Purpose**: Production-ready model, realistic evaluation
 - **Speed**: ~2-5 minutes per timestep
 
 ### Phase 3: Evaluation
-- **Dataset**: `D1_S1_L001_R1_001-017.fastq` (45K reads) ⭐
+- **Dataset**: `D1_S1_L001_R1_001-017.fastq` (45K reads)
 - **Reference**: Full genome or specific chromosomes
 - **Purpose**: Final model validation, paper results
 
@@ -100,7 +100,7 @@ query_fastq: Data/D1_S1_L001_R1_001-017.fastq  # Full dataset
 | File | Size | Reads | Use Case |
 |------|------|-------|----------|
 | `D1_S1_L001_R1_001-017_small.fastq` | 539KB | 1,000 | Development, fast training |
-| `D1_S1_L001_R1_001-017.fastq` | 24MB | ~45,000 | **Final training, evaluation** ⭐ |
+| `D1_S1_L001_R1_001-017.fastq` | 24MB | ~45,000 | Final training, evaluation |
 | `GRCh38_chr1.fasta` | 241MB | - | Quick testing |
 | `GCA_000001405.15_GRCh38_no_alt_analysis_set.fasta` | 2.9GB | - | Full genome, chromosome source |
 | `chromosomes/chr*.fasta` | 45MB-241MB each | - | Multi-chromosome training |

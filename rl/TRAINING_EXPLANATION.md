@@ -247,9 +247,9 @@ else:
 
 # Hard constraints (applied after normalization):
 if mapping_rate < 0.9:
-    reward -= 3.0  # Big penalty (episode failed)
+    reward -= 3.0  # Large penalty (episode failed)
 if edit_distance > 10.0:
-    reward -= 3.0  # Big penalty (alignment garbage)
+    reward -= 3.0  # Large penalty (poor alignment quality)
 
 # Soft penalty for low mapping rate:
 if mapping_rate < 0.5:
@@ -260,7 +260,7 @@ if mapping_rate < 0.5:
 - **Truth Metrics Dominate**: F1 score (4.0) and indels (0.8) are PRIMARY accuracy measures
 - **Runtime Balanced**: Runtime weight (-2.5) balanced with accuracy, not above it
 - **Edit Distance Soft Cap**: ED ≤ 3 gets small/no penalty, ED > 3 gets quickly increasing penalty
-- **Hard Constraints**: Big penalties for failed episodes (mapping_rate < 0.9 or ED > 10)
+- **Hard Constraints**: Large penalties for failed episodes (mapping_rate < 0.9 or ED > 10)
 - **False Positive Prevention**: Strong FP penalty (-1.0) prevents "just call more" strategy
 
 ## Benefits of Multi-Chromosome Training
