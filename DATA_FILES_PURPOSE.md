@@ -77,20 +77,20 @@ query_fastq: Data/D1_S1_L001_R1_001-017.fastq  # Full dataset
        --output-dir Data/chromosome_reads
    ```
 
-### Phase 1: Development (Current)
+### Phase 1: Development
 - **Dataset**: Chromosome-specific FASTQ files in `Data/chromosome_reads/`
 - **Reference**: `Data/chromosomes/` (multi-chromosome)
 - **Purpose**: Fast iteration, testing reward functions, prototyping
 - **Speed**: ~2-3 seconds per timestep
 - **Mapping rate**: Higher (reads pre-filtered by chromosome)
 
-### Phase 2: Final Training (Future)
+### Phase 2: Final Training
 - **Dataset**: `D1_S1_L001_R1_001-017.fastq` (45K reads) ⭐
 - **Reference**: `Data/chromosomes/` (multi-chromosome) or full genome
 - **Purpose**: Production-ready model, realistic evaluation
 - **Speed**: ~2-5 minutes per timestep
 
-### Phase 3: Evaluation (Future)
+### Phase 3: Evaluation
 - **Dataset**: `D1_S1_L001_R1_001-017.fastq` (45K reads) ⭐
 - **Reference**: Full genome or specific chromosomes
 - **Purpose**: Final model validation, paper results
