@@ -68,4 +68,4 @@ The model learns to use less sparsification for smaller datasets, explaining why
 
 ## Conclusions
 
-The PPO agent learns context-aware sparsification patterns that outperform fixed baselines, achieving 30% higher reward, 19% faster runtime, and 28% better edit distance. The model's adaptive selection (65% '01', 35% '111') based on dataset characteristics learns to use less sparsification for smaller datasets. Multi-chromosome training enables generalization across different reference sizes. The model requires longer training to reach full potential.
+The PPO agent learns context-aware sparsification patterns that outperform fixed baselines, achieving 30% higher reward, 19% faster runtime, and 28% better edit distance. The model's adaptive selection (65% '01', 35% '111') based on dataset characteristics learns to use less sparsification for smaller datasets. Multi-chromosome training enables generalization across different reference sizes.
