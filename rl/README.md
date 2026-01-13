@@ -54,27 +54,33 @@ The reward function combines multiple metrics with automatic normalization and h
 
 ```
 # Soft trade-offs (normalized):
-reward = -2.5 × runtime                    # Speed (balanced with accuracy, not above it)
-       + 1.5 × mapping_rate                # Mapping rate (moderate priority)
-       + 0.0 × alignment_score             # Disabled (truth metrics are primary)
-       + edit_distance_penalty             # Soft cap approach (see below)
-       + truth_based_metrics               # F1, TP indels, FP penalty (PRIMARY accuracy)
+runtime_normalized = runtime / 2.0  # Normalize runtime to reduce dominance
+reward = -7.0 × runtime_normalized   # Speed (balanced with accuracy, not above it)
+       + 6.0 × mapping_rate           # Mapping rate (moderate priority)
+       + 0.0 × alignment_score         # Disabled when truth metrics available
+       + edit_distance_penalty         # Soft cap approach (see below)
+       + truth_based_metrics           # F1 (scaled 1000×), TP indels, FP penalty (PRIMARY accuracy)
 
 # Edit Distance Soft Cap:
-if edit_distance <= 3.0:
-    edit_distance_penalty = -0.5 × edit_distance  # Small penalty (good enough for Illumina)
+if edit_distance <= 6.0:
+    edit_distance_penalty = -0.1 × edit_distance  # Small penalty
 else:
-    edit_distance_penalty = -0.5 × 3.0 - 4.0 × (edit_distance - 3.0)  # Quickly increasing penalty
+    edit_distance_penalty = -0.1 × 6.0 - 1.0 × (edit_distance - 6.0)  # Increasing penalty above soft cap
+
+# Critical threshold: ED > 11 gets very strong additional penalty
+if edit_distance > 11.0:
+    excess = edit_distance - 11.0
+    edit_distance_penalty -= 5.0 × 0.1 × excess  # Very strong penalty for ED > 11
 
 # Hard constraints (applied after normalization):
-if mapping_rate < 0.9:
-    reward -= 3.0  # Large penalty (episode failed)
-if edit_distance > 10.0:
-    reward -= 3.0  # Large penalty (poor alignment quality)
+if mapping_rate < 0.90:
+    reward -= 4.0  # Large penalty (episode failed)
+if edit_distance > 15.0:
+    reward -= 1.0  # Large penalty (poor alignment quality)
 
 # Soft penalty for low mapping rate:
-if mapping_rate < 0.5:
-    reward -= penalty_multiplier × (0.5 - mapping_rate)
+if mapping_rate < 0.75:
+    reward -= penalty_multiplier × (0.75 - mapping_rate)
 
 # All weights normalized to ensure balanced contribution
 reward = reward × normalization_factor
@@ -82,15 +88,24 @@ reward = reward × normalization_factor
 
 **Priority Order**: Truth metrics (F1, indels) > Runtime > Mapping rate > Edit distance (safety threshold)
 
+**Runtime Strategy**:
+- **Normalized**: Runtime is divided by 2.0 before reward calculation to reduce dominance
+- Example: 1.72s → 0.86 normalized → runtime_contrib = -7.0 × 0.86 = -6.02
+
 **Edit Distance Strategy**: 
-- **Soft cap at 3.0**: ED ≤ 3 gets small/no penalty (acceptable for Illumina)
-- **Hard threshold at 10.0**: ED > 10 incurs large penalty (poor alignment quality)
-- This gives the agent freedom to trade runtime vs ED as long as ED stays reasonable
+- **Soft cap at 6.0**: ED ≤ 6 gets small penalty (-0.1 × ED)
+- **Critical threshold at 11.0**: ED > 11 gets very strong additional penalty (5.0 × weight × excess)
+- **Hard threshold at 15.0**: ED > 15 incurs large penalty (-1.0, poor alignment quality)
+- This gives the agent freedom to trade runtime vs ED, but strongly discourages ED > 11
+
+**Mapping Rate Strategy**:
+- **Soft threshold at 0.75**: Gradual penalty for mapping_rate < 75%
+- **Hard threshold at 0.90**: Large penalty (-4.0) for mapping_rate < 90% (episode failed)
 
 **When `use_truth_metrics: true` (recommended):**
-- `f1_score_weight = 4.0` (main global metric: balanced precision/recall - DOMINATES accuracy)
-- `true_indels_tp_weight = 0.8` (strong emphasis: indels are most sensitive to sparsification quality)
-- `false_positives_penalty = -1.0` (strong penalty: prevent "just call more" strategy)
+- `f1_score_weight = 0.12` (main global metric: balanced precision/recall, scaled by 1000× in code)
+- `true_indels_tp_weight = 0.2` (emphasis: indels are sensitive to sparsification quality)
+- `false_positives_penalty = -0.15` (penalty: prevent "just call more" strategy)
 - `true_snps_tp_weight = 0.0` (disabled: F1 already captures SNP performance)
 - Raw counts disabled (`snp_count_weight = 0.0`, etc.) to prevent FP incentives
 - `normalize_weights = true` (all weights normalized to ensure balanced contribution)
@@ -99,15 +114,18 @@ reward = reward × normalization_factor
 - `small_dataset_threshold = 0.01` (threshold for "small dataset": normalized num_reads < 0.01 = <100 reads)
 
 **Current weights (configurable in YAML, all normalized automatically):**
-- `runtime_weight = -2.5` (balanced with accuracy, not above it)
-- `mapping_rate_weight = 1.5` (moderate priority: prevent low-sensitivity patterns)
-- `alignment_score_weight = 0.0` (disabled: truth metrics are primary accuracy measures)
-- `edit_distance_weight = -0.5` (low continuous influence: soft cap approach)
-- `edit_distance_soft_cap = 3.0` (ED ≤ 3: small/no penalty)
-- `edit_distance_high_threshold = 3.0` (threshold for increasing penalty)
-- `edit_distance_high_penalty_multiplier = 4.0` (strong extra penalty above soft cap)
-- `edit_distance_hard_threshold = 10.0` (hard threshold: ED > 10 incurs large penalty)
-- `mapping_rate_hard_threshold = 0.9` (hard threshold: mapping_rate < 0.9 incurs large penalty)
+- `runtime_weight = -7.0` (balanced with accuracy, not above it)
+- `runtime_normalization_factor = 2.0` (divide runtime by this factor before reward calculation)
+- `mapping_rate_weight = 6.0` (moderate priority: prevent low-sensitivity patterns)
+- `alignment_score_weight = 0.0` (disabled when truth metrics available, enabled as fallback)
+- `edit_distance_weight = -0.1` (low continuous influence: soft cap approach)
+- `edit_distance_soft_cap = 6.0` (ED ≤ 6: small penalty)
+- `edit_distance_high_threshold = 6.0` (threshold for increasing penalty)
+- `edit_distance_high_penalty_multiplier = 1.0` (extra penalty above soft cap)
+- `edit_distance_critical_threshold = 11.0` (critical threshold: ED > 11 gets very strong penalty)
+- `edit_distance_critical_penalty_multiplier = 5.0` (strong multiplier for ED > 11)
+- `edit_distance_hard_threshold = 15.0` (hard threshold: ED > 15 incurs large penalty)
+- `mapping_rate_hard_threshold = 0.90` (hard threshold: mapping_rate < 0.90 incurs large penalty)
 
 **Truth-Based Metrics (recommended when truth VCF available):**
 When `use_truth_metrics = true`, the reward function uses truth-based variant metrics instead of raw counts:
@@ -158,9 +176,6 @@ Or install individually:
 pip3 install stable-baselines3 gymnasium pyyaml numpy
 ```
 
-## Documentation
-
-- **[TRAINING_EXPLANATION.md](TRAINING_EXPLANATION.md)**: Comprehensive explanation of the training process, especially the Multi-Chromosome approach
 
 ## Usage
 
@@ -200,19 +215,59 @@ cd /path/to/Genome-on-Diet
 # Train with multi-chromosome datasets (recommended)
 python3 rl/ppo_train.py --config rl/configs/env_multi_chromosome.yaml --timesteps 200
 
+# Multi-chromosome with parallel environments (faster training)
+python3 rl/ppo_train.py \
+    --config rl/configs/env_multi_chromosome.yaml \
+    --timesteps 100 \
+    --n-envs 2 \
+    --use-subproc
+
 # Or use single dataset (legacy, deprecated)
 python3 rl/ppo_train.py --timesteps 10000
 ```
 
 **For multi-core systems:**
-- Default: 6 threads per GDiet run (configurable in YAML)
-- For faster training, use parallel environments:
+- Default: 4 threads per GDiet run (configurable in YAML)
+- For faster training, use parallel environments with multi-chromosome config:
   ```bash
-  python3 rl/ppo_train.py --timesteps 10000 --n-envs 2 --use-subproc
+  python3 rl/ppo_train.py \
+      --config rl/configs/env_multi_chromosome.yaml \
+      --timesteps 100 \
+      --n-envs 2 \
+      --use-subproc
   ```
-  This runs 2 GDiet instances in parallel (each using 6 threads).
-  - Total: ~12 threads across 2 processes
+  This runs 2 GDiet instances in parallel (each using 4 threads).
+  - Total: ~8 threads across 2 processes
   - Leaves headroom for OS and other processes
+
+**Continue training from existing model:**
+```bash
+# Continue training from a previously saved model
+python3 rl/ppo_train.py \
+    --config rl/configs/env_multi_chromosome.yaml \
+    --timesteps 200 \
+    --load-model rl/models/ppo_genome_diet.zip
+
+# Continue training with parallel environments
+python3 rl/ppo_train.py \
+    --config rl/configs/env_multi_chromosome.yaml \
+    --timesteps 200 \
+    --load-model rl/models/ppo_genome_diet.zip \
+    --n-envs 2 \
+    --use-subproc
+
+# Or continue from a checkpoint
+python3 rl/ppo_train.py \
+    --config rl/configs/env_multi_chromosome.yaml \
+    --timesteps 200 \
+    --load-model rl/models/checkpoints/ppo_genome_diet_5000_steps.zip
+```
+
+The `--load-model` flag allows you to continue training from where you left off, preserving all learned weights and training state. This is useful for:
+- Resuming interrupted training sessions
+- Incrementally training with more timesteps
+- Fine-tuning a model (hyperparameters are preserved from the saved model)
+
 
 ### 3. Evaluate Trained Model
 
@@ -263,8 +318,7 @@ rl/
 │   └── split_genome_by_chromosome.py # Split genome into chromosomes
 ├── ppo_train.py                     # PPO training script
 ├── evaluate_model.py                # Model evaluation script
-├── README.md                         # This file
-└── TRAINING_EXPLANATION.md           # Detailed training guide
+└── README.md                         # This file
 ```
 
 ## Outputs
@@ -328,38 +382,49 @@ Several optimizations have been implemented to reduce runtime:
 
 ### GDiet Threads (per environment)
 
-The number of threads used by each GDiet run is controlled in `configs/env_default.yaml`:
+The number of threads used by each GDiet run is controlled in the config YAML files:
 
 ```yaml
 env:
-  threads: 6  # Number of threads per GDiet run (adjust based on your CPU)
+  threads: 4  # Number of threads per GDiet run (4 threads × 2 envs = 8 total for parallel training)
 ```
 
 **Recommendations:**
-- **8-core systems**: 6 threads (leaves 2 cores for OS/overhead)
-- **10+ core systems**: 6-8 threads
-- **4-6 core systems**: 2-4 threads
+- **8-core systems**: 4 threads per environment (2 envs × 4 threads = 8 total, optimal for parallel training)
+- **10+ core systems**: 4-6 threads per environment (adjust based on number of parallel envs)
+- **4-6 core systems**: 2-4 threads per environment
+- **Single environment**: Can use 6 threads for maximum performance
 
-**Current Configuration:** All config files are set to use 6 threads by default.
+**Current Configuration:** Multi-chromosome config uses 4 threads (optimized for 2 parallel environments on 8-core systems).
 
 ### Parallel Environments
 
 For faster training, you can run multiple environments in parallel:
 
 ```bash
-# 2 parallel environments (each using 6 threads)
-python rl/ppo_train.py --timesteps 10000 --n-envs 2 --use-subproc
+# 2 parallel environments with multi-chromosome (recommended)
+python3 rl/ppo_train.py \
+    --config rl/configs/env_multi_chromosome.yaml \
+    --timesteps 100 \
+    --n-envs 2 \
+    --use-subproc
 
 # 4 parallel environments (may cause resource contention on smaller systems)
-python rl/ppo_train.py --timesteps 10000 --n-envs 4 --use-subproc
+python3 rl/ppo_train.py \
+    --config rl/configs/env_multi_chromosome.yaml \
+    --timesteps 100 \
+    --n-envs 4 \
+    --use-subproc
 ```
 
 **Note:** With `--use-subproc`, each environment runs in a separate process, allowing true parallelism. Without it, environments run sequentially even if you specify `--n-envs > 1`.
 
-**Recommendations (assuming 6 threads per environment):**
-- `--n-envs 1`: Single environment, 6 threads (baseline)
-- `--n-envs 2` with `--use-subproc`: Recommended for 8-core systems (2× speedup, ~12 threads total)
-- `--n-envs 4` with `--use-subproc`: May cause resource contention on smaller systems (24 threads total)
+**Recommendations (assuming 4 threads per environment for parallel training):**
+- `--n-envs 1`: Single environment, can use 6 threads (baseline)
+- `--n-envs 2` with `--use-subproc`: Recommended for 8-core systems (2 envs × 4 threads = 8 total)
+- `--n-envs 4` with `--use-subproc`: May cause resource contention on smaller systems (reduce threads per env accordingly)
+
+**Note:** When using `--load-model`, the loaded model's hyperparameters are preserved. To change hyperparameters, you must train a new model from scratch.
 
 ## TensorBoard Monitoring
 
@@ -409,13 +474,13 @@ tensorboard --logdir rl/models/tensorboard
   - This helps the model learn that smaller datasets should use less sparsification
 
 ### Reward Function Features
-- **Truth metrics dominate**: F1 score (4.0) and indels (0.8) are PRIMARY accuracy measures
-- **Edit distance soft cap**: ED ≤ 3 gets small/no penalty, ED > 3 gets quickly increasing penalty
-- **Hard constraints**: Large penalties for failed episodes (mapping_rate < 0.9 or ED > 10)
-- **Balanced runtime**: Runtime weight (-2.5) balanced with accuracy, not above it
+- **Truth metrics**: F1 score (0.05 weight, scaled 1000×) and indels (0.2) are PRIMARY accuracy measures
+- **Edit distance soft cap**: ED ≤ 3 gets small/no penalty, ED > 3 gets increasing penalty
+- **Hard constraints**: Large penalties for failed episodes (mapping_rate < 0.92 or ED > 10)
+- **Balanced runtime**: Runtime weight (-7.0) balanced with accuracy, not above it
 - **Weight normalization**: All weights automatically normalized for balanced contribution
 - **Dataset-size-aware adjustment**: Automatically adjusts weights for small datasets
-- **False positive prevention**: Strong FP penalty (-1.0) prevents "just call more" strategy
+- **False positive prevention**: FP penalty (-0.25) prevents "just call more" strategy
 
 ### Current Architecture
 - **Action Space**: MultiDiscrete[6] - generates patterns of variable length (1-6)
@@ -425,8 +490,9 @@ tensorboard --logdir rl/models/tensorboard
 - **PPO algorithm**: Proximal Policy Optimization with MLP policy network
 
 ### Technical Details
-- **GDiet threads**: 6 threads per environment (configurable in YAML)
-- **Parallel training**: Support for multiple parallel environments
+- **GDiet threads**: 4 threads per environment for parallel training (6 threads for single env, configurable in YAML)
+- **Parallel training**: Support for multiple parallel environments with `--n-envs` and `--use-subproc`
+- **Model checkpointing**: Continue training from saved models with `--load-model`
 - **SAM file parsing**: Extracts metrics including SNPs, indels, edit distance, alignment scores
 - **TensorBoard logging**: Real-time monitoring of training progress
 
@@ -447,17 +513,20 @@ Modify the reward weights in `configs/env_default.yaml` or `configs/env_multi_ch
 
 ```yaml
 env:
-  runtime_weight: -2.5        # Balanced with accuracy (not above it)
-  mapping_rate_weight: 1.5   # Moderate priority: prevent low-sensitivity patterns
-  alignment_score_weight: 0.0  # Disabled: truth metrics are primary accuracy measures
-  edit_distance_weight: -0.5  # Low continuous influence: soft cap approach
-  edit_distance_soft_cap: 3.0  # ED <= 3: small/no penalty (good enough for Illumina)
-  edit_distance_high_threshold: 3.0  # Threshold for increasing penalty
-  edit_distance_high_penalty_multiplier: 4.0  # Strong extra penalty above soft cap
-  edit_distance_hard_threshold: 10.0  # Hard threshold: ED > 10 incurs large penalty
-  edit_distance_hard_penalty: -3.0  # Large penalty for edit distance above hard threshold
-  mapping_rate_hard_threshold: 0.9  # Hard threshold: mapping_rate < 0.9 incurs large penalty
-  mapping_rate_hard_penalty: -3.0  # Large penalty for mapping rate below hard threshold
+  runtime_weight: -7.0        # Balanced with accuracy (not above it)
+  runtime_normalization_factor: 2.0  # Divide runtime by this factor before reward calculation
+  mapping_rate_weight: 6.0    # Moderate priority: prevent low-sensitivity patterns
+  alignment_score_weight: 0.0  # Disabled when truth metrics available, enabled as fallback
+  edit_distance_weight: -0.1  # Low continuous influence: soft cap approach
+  edit_distance_soft_cap: 6.0  # ED <= 6: small penalty
+  edit_distance_high_threshold: 6.0  # Threshold for increasing penalty
+  edit_distance_high_penalty_multiplier: 1.0  # Extra penalty above soft cap
+  edit_distance_critical_threshold: 11.0  # Critical threshold: ED > 11 gets very strong penalty
+  edit_distance_critical_penalty_multiplier: 5.0  # Strong multiplier for ED > 11
+  edit_distance_hard_threshold: 15.0  # Hard threshold: ED > 15 incurs large penalty
+  edit_distance_hard_penalty: -1.0  # Large penalty for edit distance above hard threshold
+  mapping_rate_hard_threshold: 0.90  # Hard threshold: mapping_rate < 0.90 incurs large penalty
+  mapping_rate_hard_penalty: -4.0  # Large penalty for mapping rate below hard threshold
   
   # When use_truth_metrics: true, set these to 0.0 (disabled)
   # Raw counts reward quantity over quality and can incentivize false positives
@@ -466,18 +535,19 @@ env:
   total_variants_weight: 0.0  # Disabled when truth metrics enabled
   
   # Truth-based weights (when use_truth_metrics: true) - PRIMARY accuracy measures
-  true_indels_tp_weight: 0.8  # Strong emphasis: indels are most sensitive to sparsification quality
-  f1_score_weight: 4.0       # Main global metric: balanced precision/recall (dominates accuracy)
-  false_positives_penalty: -1.0  # Strong penalty: prevent "just call more" strategy
-  small_dataset_runtime_weight_multiplier: 0.3  # Reduce runtime weight for small datasets (lower = speed matters less)
-  small_dataset_accuracy_weight_multiplier: 1.5  # Increase accuracy weights for small datasets (higher = accuracy matters more)
+  # NOTE: F1/precision/recall are scaled by 1000× in code (F1 ~0.1154 → scaled=115.4)
+  true_indels_tp_weight: 0.2  # Emphasis: indels are sensitive to sparsification quality
+  f1_score_weight: 0.12       # Main global metric: balanced precision/recall (scaled 1000×)
+  false_positives_penalty: -0.15  # Penalty: prevent "just call more" strategy
+  small_dataset_runtime_weight_multiplier: 0.3  # Reduce runtime weight for small datasets
+  small_dataset_accuracy_weight_multiplier: 1.5  # Increase accuracy weights for small datasets
   small_dataset_threshold: 0.01  # Threshold for "small dataset" (normalized num_reads)
 ```
 
 **Dataset-Size-Aware Learning:**
 - The reward function automatically encourages less sparsification for smaller datasets
 - This is learned behavior, not hardcoded - the model discovers this through training
-- Adjust `small_dataset_sparsification_penalty_weight` to control how strongly this effect is enforced
+- Adjust `small_dataset_runtime_weight_multiplier` and `small_dataset_accuracy_weight_multiplier` to control this effect
 
 ### Using Different Datasets
 

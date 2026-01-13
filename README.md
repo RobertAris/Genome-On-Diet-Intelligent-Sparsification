@@ -80,7 +80,7 @@ Genome-on-Diet/
 
 ## RL Project Details
 
-See `rl/README.md` and `rl/TRAINING_EXPLANATION.md` for detailed documentation on:
+See `rl/README.md` for detailed documentation on:
 - Environment architecture
 - Observation space (dataset features)
 - Reward function

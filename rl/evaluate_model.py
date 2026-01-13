@@ -77,7 +77,7 @@ def evaluate_model(
     }
 
     for episode in range(n_episodes):
-        obs, info = env.reset()
+        obs, reset_info = env.reset()
         action, _ = model.predict(obs, deterministic=True)
         
         # Ensure action is numpy array
@@ -86,6 +86,12 @@ def evaluate_model(
         obs, reward, terminated, truncated, info = env.step(action)
         
         pattern_str = info["pattern"]
+        
+        # Extract dataset size information
+        dataset_features = reset_info.get("dataset_features", {})
+        num_reads_normalized = dataset_features.get("num_reads", 0.0)
+        num_reads_actual = num_reads_normalized * 10000.0  # Denormalize
+        chromosome = reset_info.get("chromosome", "unknown")
         
         episode_data = {
             "episode": episode + 1,
@@ -98,6 +104,8 @@ def evaluate_model(
             "indel_count": info.get("indel_count", 0.0),
             "snp_count": info.get("snp_count", 0.0),
             "total_variants": info.get("total_variants", 0.0),
+            "num_reads": num_reads_actual,
+            "chromosome": chromosome,
         }
         
         results["episodes"].append(episode_data)
@@ -167,25 +175,18 @@ def evaluate_baseline(
         "avg_total_variants": 0.0,
     }
 
-    # Get pattern length from action space
     if hasattr(env.action_space, 'nvec'):
-        pattern_length = len(env.action_space.nvec)  # MultiDiscrete: nvec is array of choices per position
+        pattern_length = len(env.action_space.nvec)
     else:
-        pattern_length = 6  # Fallback
+        pattern_length = 6
 
-    # Use pattern "10" (50% sparsification) as baseline
-    # Pattern encoding: rightmost '1' marks the END of the pattern
-    # So pattern "10" requires: [1, 0, 1, ...] where the '1' at position 2 marks the end
-    baseline_pattern = "10"
     action = np.zeros(pattern_length, dtype=np.int32)
-    action[0] = 1  # Pattern starts with '1'
-    action[1] = 0  # Then '0'
-    action[2] = 1  # Marker '1' at position 2 indicates pattern ends after position 1 → "10"
+    action[0] = 1
+    action[1] = 0
+    action[2] = 1
 
     for episode in range(n_episodes):
         obs, info = env.reset()
-        # Use fixed pattern "10" as baseline
-        
         obs, reward, terminated, truncated, info = env.step(action)
         
         pattern_str = info["pattern"]
@@ -288,19 +289,39 @@ def print_results(results: Dict[str, Any], title: str):
     sorted_patterns = sorted(results["pattern_counts"].items(), key=lambda x: x[1], reverse=True)
     for pattern_str, count in sorted_patterns[:10]:
         percentage = (count / len(results["episodes"])) * 100
-        sparsification = (pattern_str.count('1') / len(pattern_str)) * 100 if pattern_str else 0
+        sparsification = (pattern_str.count('0') / len(pattern_str)) * 100 if pattern_str else 0
         print(f"  Pattern '{pattern_str}': {count:3d} times ({percentage:5.1f}%) [sparsification: {sparsification:.1f}%]")
     
-    print(f"\nEpisode Details (first 5):")
-    for ep in results["episodes"][:5]:
+    # Analyze pattern selection by dataset size
+    if any("num_reads" in ep for ep in results["episodes"]):
+        print(f"\nPattern Selection by Dataset Size:")
+        pattern_by_size = {}
+        for ep in results["episodes"]:
+            pattern = ep["pattern"]
+            num_reads = ep.get("num_reads", 0.0)
+            if pattern not in pattern_by_size:
+                pattern_by_size[pattern] = []
+            pattern_by_size[pattern].append(num_reads)
+        
+        for pattern_str in sorted(pattern_by_size.keys()):
+            reads_list = pattern_by_size[pattern_str]
+            avg_reads = np.mean(reads_list)
+            min_reads = np.min(reads_list)
+            max_reads = np.max(reads_list)
+            print(f"  Pattern '{pattern_str}': avg {avg_reads:.0f} reads (range: {min_reads:.0f}-{max_reads:.0f})")
+    
+    print(f"\nEpisode Details:")
+    for ep in results["episodes"]:
+        num_reads = ep.get("num_reads", 0.0)
+        chromosome = ep.get("chromosome", "unknown")
         print(
             f"  Ep {ep['episode']:2d}: Pattern '{ep['pattern']}' | "
             f"Reward: {ep['reward']:7.4f} | "
             f"Runtime: {ep['runtime']:5.2f}s | "
-            f"MapRate: {ep['mapping_rate']*100:5.1f}%"
+            f"MapRate: {ep['mapping_rate']*100:5.1f}% | "
+            f"Reads: {num_reads:.0f} | "
+            f"Chr: {chromosome}"
         )
-    if len(results["episodes"]) > 5:
-        print(f"  ... ({len(results['episodes']) - 5} more episodes)")
 
 
 def main() -> None:
@@ -318,8 +339,8 @@ def main() -> None:
     if not (project_root / "GDiet-ShortReads").exists():
         project_root = Path.cwd()
     
-    # Create environment
     env = load_env_from_config(config_dict, project_root=project_root)
+    env.set_evaluation_mode(evaluation_mode=True)
     env = Monitor(env, str(args.model_path.parent / "logs"))
     
     # Load model
@@ -327,18 +348,17 @@ def main() -> None:
     model = PPO.load(str(args.model_path), env=env)
     print("✓ Model loaded successfully")
     
-    # Evaluate trained model
     print(f"\nEvaluating model on {args.n_episodes} episodes...")
     model_results = evaluate_model(model, env, args.n_episodes)
     print_results(model_results, "Trained Model Results")
     
-    # Compare with baseline if requested
     if args.compare_baseline:
         print(f"\nEvaluating random baseline on {args.n_episodes} episodes...")
+        baseline_env = env.env if hasattr(env, 'env') else env
+        if hasattr(baseline_env, 'set_evaluation_mode'):
+            baseline_env.set_evaluation_mode(evaluation_mode=True)
         baseline_results = evaluate_baseline(env, args.n_episodes)
         print_results(baseline_results, "Random Baseline Results")
-        
-        # Comparison
         print(f"\n{'='*60}")
         print("Comparison: Trained Model vs Baseline (pattern '10')")
         print(f"{'='*60}")

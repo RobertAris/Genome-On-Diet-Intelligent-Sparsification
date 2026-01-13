@@ -1,11 +1,4 @@
 env:
-  # DEPRECATED: Single dataset mode
-  # Use env_multi_chromosome.yaml for training (provides diverse observations)
-  # 
-  # NOTE: This config file is outdated and does not include the latest reward function
-  # improvements (soft cap for edit distance, hard thresholds, boosted truth metrics).
-  # For current training, use env_multi_chromosome.yaml instead.
-  
   # Data paths (relative to project root)
   reference_fasta: Data/GRCh38_chr1.fasta
   query_fastq: Data/D1_S1_L001_R1_001-017_small.fastq
@@ -25,7 +18,7 @@ env:
   min_score: 100
   af_max_loc: 2
   
-  # Reward weights (OUTDATED - see env_multi_chromosome.yaml for current values)
+  # Reward weights
   runtime_weight: -6.0
   mapping_rate_weight: 10.0
   alignment_score_weight: 0.02
